@@ -13,12 +13,7 @@ Scoutly scans Reddit 24/7, scores posts on buying intent, and tells you exactly 
 
 ## How it works
 
-```
-Reddit API → Our Servers → LLM Analysis → User Dashboard
-     ↓              ↓             ↓              ↓
-  Read posts    Filter & score  AI analysis   View & export
-  (read-only)   Rule-based     DeepSeek       Markdown/CSV
-```
+![Architecture Diagram](docs/architecture.png)
 
 1. **Discover** — Scoutly searches Reddit for posts matching your keywords across selected subreddits
 2. **Filter** — Rule-based filtering removes low-quality and irrelevant posts
@@ -66,7 +61,7 @@ We only read public posts and comments to surface relevant discussions for human
 
 ## Data safety
 
-- We store post titles, URLs, scores, and comment counts for up to 90 days
+- We store post titles, URLs, scores, and comment counts for up to 30 days
 - We do not store full comment text or sensitive user profile data
 - All Reddit data is read from public subreddits only
 - We do not sell or share Reddit data with third parties
