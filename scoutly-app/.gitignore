@@ -38,3 +38,4 @@ Thumbs.db
 *.png
 !public/*.png
 !src/assets/*.png
+!docs/*.png
