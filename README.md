@@ -1,71 +1,98 @@
 # Scoutly
 
-**AI-powered Reddit discovery for SaaS marketers.**
+Read-only Reddit discovery for SaaS teams.
 
-Scoutly scans Reddit 24/7, scores posts on buying intent, and tells you exactly which threads to reply to — and what to say.
+Scoutly helps teams find public Reddit discussions where people ask for product recommendations, alternatives, comparisons, or workflow help. It scores each post for relevance and gives the user context for a human reply.
 
-## What it does
+Scoutly does not post, comment, vote, send private messages, create Reddit accounts, or automate Reddit activity.
 
-- **Monitors Reddit 24/7** — Set your keywords and subreddits once. Scoutly scans new posts around the clock.
-- **AI intent scoring** — Every post is scored on buying intent, product fit, urgency, and engagement. Focus only on the top 5%.
-- **Smart reply suggestions** — Get AI-suggested reply angles, what to avoid, and content opportunities for every high-intent thread.
-- **Export & report** — Export opportunity reports as Markdown or CSV. Perfect for content planning and team reviews.
+## What It Does
 
-## How it works
+- **Finds relevant public discussions**: Users configure a product description, keywords, competitors, and subreddits.
+- **Scores intent and fit**: Posts are scored on buying intent, product fit, search visibility, timing, and reply feasibility.
+- **Supports human review**: Scoutly shows why a post may matter, what reply angle may help, and what to avoid.
+- **Exports reports**: Users can export opportunity reports as Markdown or CSV for review.
+
+## How It Works
 
 ![Architecture Diagram](scoutly-app/docs/architecture.png)
 
-1. **Discover** — Scoutly searches Reddit for posts matching your keywords across selected subreddits
-2. **Filter** — Rule-based filtering removes low-quality and irrelevant posts
-3. **Score** — An LLM scores each remaining post on 5 dimensions (buying intent, product fit, urgency, authority, engagement)
-4. **Recommend** — The top-scoring posts appear in your dashboard with suggested reply angles
-5. **Act** — You click through to Reddit and write a genuine, human comment
+1. **Configure**: The user adds a product, keywords, competitors, and optional subreddit filters.
+2. **Discover**: Scoutly searches approved Reddit API data for matching public posts.
+3. **Filter**: Rules remove low-quality, duplicate, or excluded posts.
+4. **Score**: An LLM classifies and summarizes each candidate post.
+5. **Review**: The user opens Reddit and decides whether to reply.
 
-## Read-only by design
+## Reddit API And Data Policy
 
-Scoutly is **strictly read-only**. It never:
+Scoutly is designed for approved Reddit API access. Production use should run through OAuth or another access method approved by Reddit.
 
-- Posts comments or replies on Reddit
-- Sends private messages
-- Votes or interacts with content
-- Creates or manages user accounts
-- Stores full comment text or sensitive user data
+The current anonymous `.json` client exists for local development and early testing only. It should not be treated as the production data path for a commercial product.
 
-We only read public posts and comments to surface relevant discussions for human review. All analysis happens on our servers — no actions are taken on Reddit's behalf.
+Scoutly does not:
 
-## Tech stack
+- Automate posts, comments, votes, messages, or account creation
+- Train or fine-tune AI models on Reddit data
+- Sell, license, or redistribute raw Reddit datasets
+- Infer sensitive traits about Reddit users
+- Match Reddit users to identities outside Reddit
+- Store full comment histories
 
-- **Backend**: FastAPI + Celery + PostgreSQL + Redis
-- **Frontend**: React + TypeScript + Tailwind CSS + shadcn/ui
-- **AI**: DeepSeek LLM for intent scoring and reply suggestions
+Scoutly stores the minimum data needed for reports and de-duplication, such as post title, permalink, subreddit, timestamp, score metadata, and analysis output. The current retention target is up to 30 days unless a shorter period is required.
+
+## Tech Stack
+
+- **Backend**: FastAPI, Celery, PostgreSQL, Redis
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- **AI**: DeepSeek-compatible OpenAI API client for classification and summaries
 - **Deployment**: Docker Compose
 
-## Project structure
+## Project Structure
 
-```
-├── scoutly-api/     # Backend (FastAPI)
+```text
+├── scoutly-api/     # Backend API
 │   ├── app/
-│   │   ├── api/         # REST API endpoints
-│   │   ├── services/    # Business logic
-│   │   ├── integrations/ # Reddit API, LLM client
-│   │   ├── workers/     # Celery async tasks
-│   │   └── prompts/     # LLM prompt templates
-│   └── alembic/         # Database migrations
+│   │   ├── api/          # REST API endpoints
+│   │   ├── services/     # Business logic
+│   │   ├── integrations/ # Reddit API and LLM clients
+│   │   ├── workers/      # Celery scan tasks
+│   │   └── prompts/      # LLM prompt templates
+│   └── alembic/          # Database migrations
 │
-└── scoutly-app/     # Frontend (React)
+└── scoutly-app/     # Frontend app
     └── src/
-        ├── api/         # API client
-        ├── components/  # UI components
-        └── App.tsx      # Main app
+        ├── api/          # API client
+        ├── components/   # UI components
+        └── App.tsx       # Main app
 ```
 
-## Data safety
+## Local Development
 
-- We store post titles, URLs, scores, and comment counts for up to 30 days
-- We do not store full comment text or sensitive user profile data
-- All Reddit data is read from public subreddits only
-- We do not sell or share Reddit data with third parties
+Backend:
+
+```bash
+cd scoutly-api
+cp .env.example .env
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Worker:
+
+```bash
+cd scoutly-api
+celery -A app.workers.celery_app.celery worker --loglevel=info --concurrency=2
+```
+
+Frontend:
+
+```bash
+cd scoutly-app
+npm install
+npm run dev
+```
 
 ## License
 
-This project is in early development. More details coming soon.
+This project is in early development.

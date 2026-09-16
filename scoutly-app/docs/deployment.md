@@ -57,7 +57,7 @@ threadscout/
 │   ├── requirements.txt      # Python 依赖
 │   ├── docker-compose.yml    # Docker 编排
 │   ├── Dockerfile            # Docker 镜像
-│   └── README.md
+│   └── README.md            # 后端开发说明
 │
 └── threadscout-app/          # 前端应用
     ├── src/
@@ -627,4 +627,4 @@ Write-Host "API Docs: http://127.0.0.1:8000/docs"
 
 - [后端技术方案](./backend-architecture.md)
 - [前后端对接文档](./api-integration.md)
-- [后端 README](../threadscout-api/README.md)
+- [后端 README](../../scoutly-api/README.md)

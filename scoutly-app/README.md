@@ -1,32 +1,46 @@
-# React + TypeScript + Vite
+# Scoutly App
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Frontend for Scoutly, a read-only Reddit discovery workspace for SaaS teams.
 
-Currently, two official plugins are available:
+The app lets users create projects, configure discovery inputs, run scans, review scored Reddit opportunities, update review status, and export reports.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS v4
+- shadcn/ui
+- Base UI primitives
+- lucide-react
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Local Development
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The app expects the backend at `http://127.0.0.1:8000/api/v1` by default.
+
+To override:
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
+VITE_API_KEY=dev-api-key
+```
+
+## Scripts
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
+
+## Product Boundaries
+
+Scoutly supports human review only. The frontend does not provide controls to post, comment, vote, message users, create Reddit accounts, or automate Reddit activity.
+
+Opportunity details may show an AI-generated reply angle, risk note, and content idea. Users must open Reddit and write any reply themselves.

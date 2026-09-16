@@ -1,270 +1,173 @@
-# ThreadScout API
+# Scoutly API
 
-Reddit 高意向帖子发现工具 - 后端 API
+Backend API for Scoutly, a read-only Reddit discovery tool for SaaS teams.
 
-## 技术栈
+Scoutly finds public Reddit posts where people ask for recommendations, alternatives, comparisons, or workflow help. It scores each post and stores a short analysis for human review.
 
+Scoutly does not post, comment, vote, send private messages, create Reddit accounts, or automate Reddit activity.
 
+## Tech Stack
 
-* **框架**: FastAPI + Python 3.11+
+- **Framework**: FastAPI + Python 3.11+
+- **Database**: PostgreSQL 16+
+- **ORM**: SQLAlchemy 2.0 async
+- **Migrations**: Alembic
+- **Queue**: Celery + Redis
+- **Reddit access**: Approved Reddit API access for production
+- **LLM**: DeepSeek-compatible OpenAI API client
 
-* **数据库**: PostgreSQL 16+
+## Reddit API Notes
 
-* **ORM**: SQLAlchemy 2.0 (async)
+Production use should run through Reddit-approved API access, such as OAuth after approval.
 
-* **迁移**: Alembic
+The anonymous `.json` client in `app/integrations/reddit_client.py` is a development fallback while API approval is pending. Do not present it as the production data path for a commercial product.
 
-* **任务队列**: Celery + Redis
+Data handling rules for this project:
 
-* **Reddit 接入**: 匿名 .json 端点（可切换 OAuth/PRAW）
+- Store only the fields needed for reports and de-duplication.
+- Do not store full comment histories.
+- Do not train or fine-tune AI models on Reddit data.
+- Do not sell, license, or redistribute raw Reddit data.
+- Do not infer sensitive traits or match Reddit users to off-platform identities.
+- Keep all Reddit engagement human-controlled.
 
-* **LLM**: DeepSeek V4 Flash（OpenAI 兼容接口）
+## Quick Start
 
-## 快速开始
+### 1. Prepare Environment
 
-### 1. 环境准备
-
-
-
-```
-\# 安装依赖
-
+```bash
 pip install -r requirements.txt
-
-\# 复制环境变量配置
-
 cp .env.example .env
-
-\# 编辑 .env，填入 DeepSeek API key 等配置
 ```
 
-### 2. 启动依赖服务（PostgreSQL + Redis）
+Edit `.env` and add the required API keys.
 
+### 2. Start PostgreSQL And Redis
 
-
-```
+```bash
 docker-compose up -d db redis
 ```
 
-### 3. 数据库迁移
+### 3. Run Migrations
 
-
-
-```
+```bash
 alembic upgrade head
 ```
 
-### 4. 启动 API 服务
+### 4. Start API
 
-
-
-```
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API 文档: [http://localhost:8000/docs](http://localhost:8000/docs)
+API docs: `http://localhost:8000/docs`
 
-### 5. 启动 Celery Worker（扫描任务）
+### 5. Start Celery Worker
 
-
-
-```
-celery -A app.workers.celery\_app.celery worker --loglevel=info --concurrency=2
+```bash
+celery -A app.workers.celery_app.celery worker --loglevel=info --concurrency=2
 ```
 
-### 一键启动（全部服务）
+### Docker
 
-
-
-```
+```bash
 docker-compose up -d
+docker-compose exec api alembic upgrade head
 ```
 
-## API 概览
+## API Overview
 
 Base URL: `http://localhost:8000/api/v1`
 
-认证: Header `X-API-Key: <your-api-key>`（开发环境可省略）
+Authentication: `X-API-Key: <your-api-key>`
 
-### 项目管理
+### Projects
 
+| Method | Path | Description |
+|---|---|---|
+| GET | `/projects` | List projects with stats |
+| POST | `/projects` | Create project |
+| GET | `/projects/{id}` | Get project |
+| PATCH | `/projects/{id}` | Update project |
+| DELETE | `/projects/{id}` | Delete project |
 
+### Scans
 
-| 方法     | 路径               | 说明        |
-| ------ | ---------------- | --------- |
-| GET    | `/projects`      | 项目列表（含统计） |
-| POST   | `/projects`      | 创建项目      |
-| GET    | `/projects/{id}` | 项目详情      |
-| PATCH  | `/projects/{id}` | 更新项目      |
-| DELETE | `/projects/{id}` | 删除项目      |
+| Method | Path | Description |
+|---|---|---|
+| POST | `/projects/{id}/scan` | Start async scan |
+| GET | `/scans/{id}` | Get scan progress |
+| GET | `/projects/{id}/scans` | List scan history |
 
-### 扫描
+### Opportunities
 
+| Method | Path | Description |
+|---|---|---|
+| GET | `/projects/{id}/opportunities` | List opportunities |
+| GET | `/opportunities/{id}` | Get opportunity details |
+| PATCH | `/opportunities/{id}` | Update status |
+| POST | `/projects/{id}/export` | Export Markdown or CSV report |
 
+## Scoring
 
-| 方法   | 路径                     | 说明       |
-| ---- | ---------------------- | -------- |
-| POST | `/projects/{id}/scan`  | 触发扫描（异步） |
-| GET  | `/scans/{id}`          | 扫描进度     |
-| GET  | `/projects/{id}/scans` | 扫描历史     |
+| Dimension | Max | Description |
+|---|---:|---|
+| buying_intent | 30 | Recommendation, alternative, comparison, or purchase intent |
+| product_fit | 20 | Match between the post and the product |
+| search_visibility | 20 | Long-tail search value |
+| timing | 15 | Freshness and discussion window |
+| reply_feasibility | 15 | Whether a helpful human reply fits the thread |
 
-### 机会
+Priority:
 
+- `high`: total score >= 80 and `buying_intent >= 20`
+- `medium`: total score 60 to 79
+- `watch`: total score below 60
 
+## Scan Flow
 
-| 方法    | 路径                             | 说明                 |
-| ----- | ------------------------------ | ------------------ |
-| GET   | `/projects/{id}/opportunities` | 机会列表（分页 / 筛选 / 排序） |
-| GET   | `/opportunities/{id}`          | 机会详情（含评分明细）        |
-| PATCH | `/opportunities/{id}`          | 更新状态               |
-| POST  | `/projects/{id}/export`        | 导出报告（Markdown/CSV） |
-
-## 项目结构
-
-
-
-```
-threadscout-api/
-
-├── app/
-
-│   ├── main.py              # FastAPI 入口
-
-│   ├── config.py            # 配置管理
-
-│   ├── database.py          # 数据库连接
-
-│   ├── deps.py              # 依赖注入（认证等）
-
-│   ├── models/              # SQLAlchemy 数据模型
-
-│   ├── schemas/             # Pydantic 请求/响应模型
-
-│   ├── api/v1/              # API 路由
-
-│   ├── services/            # 业务逻辑层
-
-│   ├── workers/             # Celery 异步任务
-
-│   ├── integrations/        # 外部服务集成（Reddit/LLM）
-
-│   └── prompts/             # LLM Prompt 模板
-
-├── alembic/                 # 数据库迁移
-
-├── tests/                   # 测试
-
-├── .env.example             # 环境变量模板
-
-├── docker-compose.yml       # Docker 编排
-
-├── Dockerfile
-
-├── requirements.txt
-
-└── alembic.ini
+```text
+Create scan
+-> generate search queries
+-> fetch candidate posts through approved Reddit API access
+-> filter and de-duplicate
+-> score candidates with LLM
+-> store opportunities
+-> expose results through API
 ```
 
-## 评分维度
+Scans run through Celery. The frontend polls `GET /scans/{id}` for progress.
 
+## Environment Variables
 
+See `.env.example`.
 
-| 维度                 | 满分      | 说明           |
-| ------------------ | ------- | ------------ |
-| buying\_intent     | 30      | 购买 / 选型意图强度  |
-| product\_fit       | 20      | 与产品的匹配度      |
-| search\_visibility | 20      | 标题的 SEO 长尾价值 |
-| timing             | 15      | 回复时机（新鲜度）    |
-| reply\_feasibility | 15      | 安全回复的可行性     |
-| **总分**             | **100** |              |
+| Variable | Description | Default |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL connection string | required |
+| `REDIS_URL` | Redis connection string | required |
+| `DEEPSEEK_API_KEY` | LLM API key | required |
+| `DEEPSEEK_MODEL` | LLM model | `deepseek-v4-flash` |
+| `REDDIT_AUTH_MODE` | Reddit access mode | `anonymous` for development fallback |
+| `API_KEY` | API auth key | `dev-api-key` |
 
-**优先级判定**:
+For approved OAuth access, configure `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and the required OAuth settings.
 
+## Development
 
+Run tests:
 
-* high: 总分 ≥ 80 且 buying\_intent ≥ 20
-
-* medium: 总分 60-79
-
-* watch: 总分 < 60
-
-## 扫描流程
-
-
-
-```
-触发扫描 → 生成检索 query(20-30个) → Reddit API 拉取候选
-
-→ 规则粗筛(关键词匹配/subreddit过滤/去重) → LLM 逐条评分
-
-→ 写入数据库 → 完成
-```
-
-
-
-* 扫描异步执行（Celery）
-
-* 前端通过 `GET /scans/{id}` 轮询进度
-
-* 已评分的机会立即可查（不需要等全部完成）
-
-## 环境变量
-
-见 `.env.example`。关键配置：
-
-
-
-| 变量                 | 说明               | 默认值               |
-| ------------------ | ---------------- | ----------------- |
-| `DATABASE_URL`     | PostgreSQL 连接串   | -                 |
-| `REDIS_URL`        | Redis 连接串        | -                 |
-| `DEEPSEEK_API_KEY` | DeepSeek API Key | -                 |
-| `DEEPSEEK_MODEL`   | LLM 模型名          | deepseek-v4-flash |
-| `REDDIT_AUTH_MODE` | Reddit 认证模式      | anonymous         |
-| `API_KEY`          | API 认证密钥         | dev-api-key       |
-
-## Reddit 接入模式
-
-当前支持两种模式，通过 `REDDIT_AUTH_MODE` 切换：
-
-
-
-1. **anonymous**（默认）: 使用 Reddit 公开 .json 端点，不需要注册应用，速率限制约 10 次 / 分钟
-
-2. **oauth**: 使用 PRAW + OAuth 认证，需要注册 Reddit 开发者应用，速率限制 60 次 / 分钟
-
-切换到 OAuth 模式需要在 `.env` 中填入 `REDDIT_CLIENT_ID`、`REDDIT_CLIENT_SECRET`、`REDDIT_USERNAME`、`REDDIT_PASSWORD`。
-
-## 开发说明
-
-### 生成新的数据库迁移
-
-
-
-```
-alembic revision --autogenerate -m "description"
-
-alembic upgrade head
-```
-
-### 运行测试
-
-
-
-```
+```bash
 pytest
 ```
 
-### 代码检查
+Format and lint:
 
-
-
-```
+```bash
 ruff check .
-
 black .
 ```
 
-## 许可证
+## License
 
 MIT
