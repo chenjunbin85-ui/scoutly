@@ -13,7 +13,7 @@ Scoutly scans Reddit 24/7, scores posts on buying intent, and tells you exactly 
 
 ## How it works
 
-![Architecture Diagram](docs/architecture.png)
+![Architecture Diagram](scoutly-app/docs/architecture.png)
 
 1. **Discover** — Scoutly searches Reddit for posts matching your keywords across selected subreddits
 2. **Filter** — Rule-based filtering removes low-quality and irrelevant posts
