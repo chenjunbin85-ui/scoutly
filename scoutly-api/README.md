@@ -1,10 +1,17 @@
 # Scoutly API
 
-Backend API for Scoutly, a read-only Reddit discovery tool for SaaS teams.
+Scoutly API is the backend service for the Scoutly Reddit discovery workspace. It manages projects, runs scan jobs, stores scored opportunities, and exports reports for human review.
 
-Scoutly finds public Reddit posts where people ask for recommendations, alternatives, comparisons, or workflow help. It scores each post and stores a short analysis for human review.
+The service reads public Reddit data through approved API access in production. It does not publish Reddit content or perform Reddit account actions.
 
-Scoutly does not post, comment, vote, send private messages, create Reddit accounts, or automate Reddit activity.
+## Responsibilities
+
+- Manage product discovery projects and subreddit filters.
+- Create and track asynchronous scan jobs.
+- Generate search queries from keywords and competitor names.
+- Fetch candidate posts through the configured Reddit client.
+- Filter, de-duplicate, score, and persist opportunities.
+- Serve opportunity lists, details, status updates, and exports to the frontend.
 
 ## Tech Stack
 
@@ -13,67 +20,95 @@ Scoutly does not post, comment, vote, send private messages, create Reddit accou
 - **ORM**: SQLAlchemy 2.0 async
 - **Migrations**: Alembic
 - **Queue**: Celery + Redis
-- **Reddit access**: Approved Reddit API access for production
-- **LLM**: DeepSeek-compatible OpenAI API client
+- **LLM client**: OpenAI-compatible client configured for DeepSeek
+- **Runtime packaging**: Docker Compose
 
-## Reddit API Notes
+## Reddit API And Data Handling
 
-Production use should run through Reddit-approved API access, such as OAuth after approval.
+Production deployments should use Reddit-approved API access, such as OAuth after approval.
 
-The anonymous `.json` client in `app/integrations/reddit_client.py` is a development fallback while API approval is pending. Do not present it as the production data path for a commercial product.
+The current anonymous `.json` implementation in `app/integrations/reddit_client.py` supports local development while API approval is pending. Treat it as a temporary adapter, not a commercial data source.
 
-Data handling rules for this project:
+The backend enforces a read-only product boundary:
 
-- Store only the fields needed for reports and de-duplication.
-- Do not store full comment histories.
-- Do not train or fine-tune AI models on Reddit data.
-- Do not sell, license, or redistribute raw Reddit data.
-- Do not infer sensitive traits or match Reddit users to off-platform identities.
-- Keep all Reddit engagement human-controlled.
+- No Reddit posting, commenting, voting, messaging, or account creation.
+- No automated engagement.
+- No model training or fine-tuning on Reddit data.
+- No resale, licensing, or redistribution of raw Reddit data.
+- No sensitive-trait inference or off-platform identity matching.
+
+Stored records focus on operational fields: title, permalink, subreddit, author handle where available, timestamp, score metadata, comment count, LLM analysis, and review status.
+
+## Application Structure
+
+```text
+app/
+├── api/v1/          # FastAPI routes
+├── integrations/    # Reddit and LLM clients
+├── models/          # SQLAlchemy models
+├── prompts/         # LLM prompt templates
+├── schemas/         # Pydantic request and response models
+├── services/        # Business logic
+├── workers/         # Celery app and scan task
+├── config.py        # Environment configuration
+├── database.py      # Async SQLAlchemy setup
+└── main.py          # FastAPI entrypoint
+```
 
 ## Quick Start
 
-### 1. Prepare Environment
+Install dependencies and configure environment:
 
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and add the required API keys.
-
-### 2. Start PostgreSQL And Redis
+Start PostgreSQL and Redis:
 
 ```bash
 docker-compose up -d db redis
 ```
 
-### 3. Run Migrations
+Run migrations:
 
 ```bash
 alembic upgrade head
 ```
 
-### 4. Start API
+Start the API:
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API docs: `http://localhost:8000/docs`
-
-### 5. Start Celery Worker
+Start the worker:
 
 ```bash
 celery -A app.workers.celery_app.celery worker --loglevel=info --concurrency=2
 ```
 
-### Docker
+On Windows, use the solo pool:
+
+```bash
+celery -A app.workers.celery_app.celery worker --loglevel=info --pool=solo
+```
+
+API docs: `http://localhost:8000/docs`
+
+## Docker
 
 ```bash
 docker-compose up -d
 docker-compose exec api alembic upgrade head
 ```
+
+Services:
+
+- `api`: FastAPI service on port `8000`
+- `worker`: Celery scan worker
+- `db`: PostgreSQL
+- `redis`: Redis broker
 
 ## API Overview
 
@@ -85,40 +120,40 @@ Authentication: `X-API-Key: <your-api-key>`
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects` | List projects with stats |
-| POST | `/projects` | Create project |
-| GET | `/projects/{id}` | Get project |
-| PATCH | `/projects/{id}` | Update project |
-| DELETE | `/projects/{id}` | Delete project |
+| GET | `/projects` | List projects with counts and last scan status |
+| POST | `/projects` | Create a discovery project |
+| GET | `/projects/{id}` | Get project configuration |
+| PATCH | `/projects/{id}` | Update project configuration |
+| DELETE | `/projects/{id}` | Delete project and related scans/opportunities |
 
 ### Scans
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/projects/{id}/scan` | Start async scan |
-| GET | `/scans/{id}` | Get scan progress |
-| GET | `/projects/{id}/scans` | List scan history |
+| POST | `/projects/{id}/scan` | Create a scan and enqueue a Celery task |
+| GET | `/scans/{id}` | Read scan status and progress counters |
+| GET | `/projects/{id}/scans` | List recent scans for a project |
 
 ### Opportunities
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{id}/opportunities` | List opportunities |
-| GET | `/opportunities/{id}` | Get opportunity details |
-| PATCH | `/opportunities/{id}` | Update status |
+| GET | `/projects/{id}/opportunities` | List opportunities with pagination, filtering, sorting, and search |
+| GET | `/opportunities/{id}` | Read one opportunity with score breakdowns |
+| PATCH | `/opportunities/{id}` | Update review status |
 | POST | `/projects/{id}/export` | Export Markdown or CSV report |
 
-## Scoring
+## Scoring Model
 
 | Dimension | Max | Description |
 |---|---:|---|
-| buying_intent | 30 | Recommendation, alternative, comparison, or purchase intent |
-| product_fit | 20 | Match between the post and the product |
-| search_visibility | 20 | Long-tail search value |
-| timing | 15 | Freshness and discussion window |
-| reply_feasibility | 15 | Whether a helpful human reply fits the thread |
+| `buying_intent` | 30 | Strength of recommendation, comparison, alternative, or purchase intent |
+| `product_fit` | 20 | Fit between the post and the configured product |
+| `search_visibility` | 20 | Long-tail search value and discussion quality |
+| `timing` | 15 | Freshness and remaining reply window |
+| `reply_feasibility` | 15 | Whether a useful, low-risk human reply fits the thread |
 
-Priority:
+Priority rules:
 
 - `high`: total score >= 80 and `buying_intent >= 20`
 - `medium`: total score 60 to 79
@@ -127,16 +162,20 @@ Priority:
 ## Scan Flow
 
 ```text
-Create scan
--> generate search queries
--> fetch candidate posts through approved Reddit API access
+POST /projects/{id}/scan
+-> create Scan row
+-> enqueue Celery task
+-> load project configuration
+-> generate queries
+-> fetch public Reddit candidates
 -> filter and de-duplicate
--> score candidates with LLM
--> store opportunities
--> expose results through API
+-> fetch limited comment context when needed
+-> score with LLM
+-> create Opportunity and ScoreBreakdown rows
+-> mark scan completed or failed
 ```
 
-Scans run through Celery. The frontend polls `GET /scans/{id}` for progress.
+The frontend polls `GET /scans/{id}` and refreshes opportunities when the scan completes.
 
 ## Environment Variables
 
@@ -144,14 +183,19 @@ See `.env.example`.
 
 | Variable | Description | Default |
 |---|---|---|
+| `APP_ENV` | Runtime environment | `development` |
+| `API_KEY` | API authentication key | `dev-api-key` |
 | `DATABASE_URL` | PostgreSQL connection string | required |
 | `REDIS_URL` | Redis connection string | required |
+| `REDDIT_AUTH_MODE` | Reddit adapter mode | `anonymous` development fallback |
+| `REDDIT_CLIENT_ID` | OAuth client ID after approval | empty |
+| `REDDIT_CLIENT_SECRET` | OAuth client secret after approval | empty |
 | `DEEPSEEK_API_KEY` | LLM API key | required |
+| `DEEPSEEK_BASE_URL` | OpenAI-compatible base URL | `https://api.deepseek.com/v1` |
 | `DEEPSEEK_MODEL` | LLM model | `deepseek-v4-flash` |
-| `REDDIT_AUTH_MODE` | Reddit access mode | `anonymous` for development fallback |
-| `API_KEY` | API auth key | `dev-api-key` |
-
-For approved OAuth access, configure `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and the required OAuth settings.
+| `SCAN_MAX_QUERIES` | Query cap per scan | `30` |
+| `SCAN_MAX_CANDIDATES` | Candidate cap per query | `100` |
+| `SCAN_REQUEST_INTERVAL` | Request spacing in seconds | `1.5` |
 
 ## Development
 
@@ -161,7 +205,7 @@ Run tests:
 pytest
 ```
 
-Format and lint:
+Run checks:
 
 ```bash
 ruff check .
