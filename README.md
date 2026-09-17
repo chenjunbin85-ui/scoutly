@@ -41,16 +41,6 @@ Current storage targets include post title, permalink, subreddit, timestamp, sco
 
 ![Architecture Diagram](scoutly-app/docs/architecture.png)
 
-```text
-Product profile
--> generated search queries
--> approved Reddit API access
--> rule-based filtering
--> LLM scoring and summaries
--> opportunity dashboard
--> Markdown or CSV export
-```
-
 ## Tech Stack
 
 - **Backend**: FastAPI, SQLAlchemy async, Celery, PostgreSQL, Redis
